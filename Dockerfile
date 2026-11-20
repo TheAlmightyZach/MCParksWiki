@@ -1,41 +1,35 @@
-# Use php-fpm image
-FROM mediawiki:stable-fpm
+FROM mediawiki:1.46.2-fpm
 
-# Install packages
+# System packages (lua5.1-dev is needed to build LuaSandbox)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    cron \
-    bash \
-    curl \
-    lua5.1-dev \
-    nginx \
-    supervisor \
-    unzip \
-    && \
-    chown -Rf www-data:www-data /var/lib/nginx
+        cron \
+        lua5.1-dev \
+        nginx \
+        supervisor \
+        unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && chown -Rf www-data:www-data /var/lib/nginx
 
-# Install extra php extensions
-RUN pecl install luasandbox; \
-	docker-php-ext-enable \
-		luasandbox \
-	; \
-    rm -r /tmp/pear
+# LuaSandbox for Scribunto
+RUN pecl install luasandbox && \
+    docker-php-ext-enable luasandbox && \
+    rm -rf /tmp/pear
 
-# Install composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-COPY config/var/www/html/composer.local.json /var/www/html
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
-# Copy all configuration values to their respective directories
+# Extensions — kept before the config copy so config edits don't re-clone everything
+COPY config/var/www/html/composer.local.json /var/www/html/
+COPY scripts/extensionInstaller.sh /tmp/extensionInstaller.sh
+RUN bash /tmp/extensionInstaller.sh && rm /tmp/extensionInstaller.sh
+
+# Config files and runtime scripts
 COPY config /
-
-# Install scripts and run extension installer
 COPY scripts /scripts
-RUN chmod -R +x /scripts/; \
-    /bin/bash /scripts/extensionInstaller.sh && \
-    rm /scripts/extensionInstaller.sh && \
-    chown -Rf www-data:www-data /scripts
+RUN rm -f /scripts/extensionInstaller.sh && \
+    chmod +x /scripts/*.sh && \
+    chown -R www-data:www-data /scripts && \
+    chmod 644 /etc/cron.d/cron
 
-# Set file permissions
-RUN chmod -R 644 /etc/cron.d
-
+EXPOSE 80
 CMD ["/scripts/entrypoint.sh"]
