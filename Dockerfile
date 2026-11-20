@@ -1,20 +1,15 @@
 FROM mediawiki:1.46.2-fpm
 
-# System packages (lua5.1-dev is needed to build LuaSandbox)
+# System packages
+# (LuaSandbox for Scribunto already ships with the official mediawiki image)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         cron \
-        lua5.1-dev \
         nginx \
         supervisor \
         unzip \
     && rm -rf /var/lib/apt/lists/* \
     && chown -Rf www-data:www-data /var/lib/nginx
-
-# LuaSandbox for Scribunto
-RUN pecl install luasandbox && \
-    docker-php-ext-enable luasandbox && \
-    rm -rf /tmp/pear
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
